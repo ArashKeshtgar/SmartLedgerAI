@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+
+    "SqlConnectionString": "Server=tcp:<your-server>.database.windows.net,1433;Database=FinancePowerApp;Authentication=Active Directory Default;Encrypt=True;",
+    "OPENAI_ENDPOINT": "https://<your-resource>.openai.azure.com",
+    "OPENAI_KEY": "<your-azure-openai-key>",
+    "OPENAI_DEPLOYMENT": "<your-chat-deployment-name>"
+  }
+}

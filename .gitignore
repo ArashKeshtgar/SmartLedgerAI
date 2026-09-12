@@ -1,0 +1,50 @@
+# ---- Secrets: never commit these ----------------------------------
+local.settings.json
+*.PublishSettings
+*.pubxml
+*.pubxml.user
+appsettings.*.local.json
+*.publishsettings
+
+# ---- Build output --------------------------------------------------
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+build/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+# ---- Visual Studio / Rider / VS Code -------------------------------
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.DotSettings.user
+
+# ---- NuGet ---------------------------------------------------------
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ---- Azure Functions -----------------------------------------------
+azure-functions-core-tools/
+.azurefunctions/
+
+# ---- OS ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
