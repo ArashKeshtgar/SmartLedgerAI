@@ -33,7 +33,7 @@ public class AnalyzeExpense
             // Input is now just ExpenseId, not manual stat fields
             var input = await JsonSerializer.DeserializeAsync<ExpenseIdRequest>(req.Body);
 
-            if (input is null || input.ExpenseId <= 0)
+            if (!ExpenseRequestValidator.IsValid(input))
             {
                 var bad = req.CreateResponse(HttpStatusCode.BadRequest);
                 await bad.WriteStringAsync("Invalid request body. Expecting { \"ExpenseId\": 101 }");
@@ -41,12 +41,13 @@ public class AnalyzeExpense
             }
 
             // Read real stats from the view instead of trusting the caller
-            var stats = await GetExpenseStatsAsync(input.ExpenseId);
+            var expenseId = input!.ExpenseId;
+            var stats = await GetExpenseStatsAsync(expenseId);
 
             if (stats is null)
             {
                 var notFound = req.CreateResponse(HttpStatusCode.NotFound);
-                await notFound.WriteStringAsync($"No stats found for ExpenseId {input.ExpenseId}.");
+                await notFound.WriteStringAsync($"No stats found for ExpenseId {expenseId}.");
                 return notFound;
             }
 
@@ -58,6 +59,13 @@ public class AnalyzeExpense
             if (risk != "Low")
             {
                 explanation = await ExplainWithAI(stats, risk);
+
+                var publisher = new AnomalyEventPublisher(_logger);
+                await publisher.PublishAsync(
+                    new AnomalyDetectedEvent(
+                        stats.ExpenseId, stats.Category, stats.Amount, stats.ZScore,
+                        risk, explanation, DateTime.UtcNow),
+                    correlationId);
             }
 
             var result = new
@@ -159,14 +167,7 @@ public class AnalyzeExpense
         using var httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Add("api-key", key);
 
-        var prompt = $"""
-        Expense category: {stats.Category}
-        Amount: {stats.Amount}
-        Z-Score: {stats.ZScore}
-        Risk: {risk}
-
-        Explain in one short sentence why this expense might be unusual.
-        """;
+        var prompt = PromptBuilder.BuildAnomalyExplanationPrompt(stats, risk);
 
         var body = new
         {
@@ -216,3 +217,23 @@ public record ExpenseStatsRow(
     decimal ZScore,
     string RiskLevel
 );
+
+// Pure, unit-testable helpers — no I/O, so they can be exercised without a real
+// Function host, database, or OpenAI endpoint.
+public static class ExpenseRequestValidator
+{
+    public static bool IsValid(ExpenseIdRequest? request) =>
+        request is not null && request.ExpenseId > 0;
+}
+
+public static class PromptBuilder
+{
+    public static string BuildAnomalyExplanationPrompt(ExpenseStatsRow stats, string risk) => $"""
+        Expense category: {stats.Category}
+        Amount: {stats.Amount}
+        Z-Score: {stats.ZScore}
+        Risk: {risk}
+
+        Explain in one short sentence why this expense might be unusual.
+        """;
+}

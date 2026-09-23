@@ -13,6 +13,7 @@
 		<PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.17.0" OutputItemType="Analyzer" />
 		<PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http" Version="3.2.0" />
 		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
+		<PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
 		<!-- ✅ AI -->
 		
 		<!--<PackageReference Include="OpenAI" Version="1.0.0-beta.8" />-->

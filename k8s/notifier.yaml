@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifier
+  namespace: smartledgerai
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: notifier }
+  template:
+    metadata:
+      labels: { app: notifier }
+    spec:
+      containers:
+        - name: notifier
+          image: repo-notifier:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: RabbitMqConnectionString
+              value: "amqp://guest:guest@rabbitmq:5672"

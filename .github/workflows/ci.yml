@@ -18,10 +18,17 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore src/SmartLedgerAI.Functions/SmartLedgerAI_Functions.csproj
+        run: |
+          dotnet restore src/SmartLedgerAI.Functions/SmartLedgerAI_Functions.csproj
+          dotnet restore src/SmartLedgerAI.AnomalyNotifier/SmartLedgerAI.AnomalyNotifier.csproj
 
       - name: Build
-        run: dotnet build src/SmartLedgerAI.Functions/SmartLedgerAI_Functions.csproj -c Release --no-restore
+        run: |
+          dotnet build src/SmartLedgerAI.Functions/SmartLedgerAI_Functions.csproj -c Release --no-restore
+          dotnet build src/SmartLedgerAI.AnomalyNotifier/SmartLedgerAI.AnomalyNotifier.csproj -c Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/SmartLedgerAI.Functions.Tests/SmartLedgerAI.Functions.Tests.csproj -c Release
 
   docker-build:
     runs-on: ubuntu-latest
@@ -29,10 +36,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build container image
+      - name: Build functions container image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: false
           tags: smartledgerai-functions:ci
+
+      - name: Build notifier container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./src/SmartLedgerAI.AnomalyNotifier/Dockerfile
+          push: false
+          tags: smartledgerai-notifier:ci
