@@ -28,7 +28,9 @@ jobs:
           dotnet build src/SmartLedgerAI.AnomalyNotifier/SmartLedgerAI.AnomalyNotifier.csproj -c Release --no-restore
 
       - name: Test
-        run: dotnet test tests/SmartLedgerAI.Functions.Tests/SmartLedgerAI.Functions.Tests.csproj -c Release
+        run: |
+          dotnet test tests/SmartLedgerAI.Functions.Tests/SmartLedgerAI.Functions.Tests.csproj -c Release
+          dotnet test tests/SmartLedgerAI.SchemaDiff.Tests/SmartLedgerAI.SchemaDiff.Tests.csproj -c Release
 
   docker-build:
     runs-on: ubuntu-latest

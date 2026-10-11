@@ -96,6 +96,7 @@ Separate handling for bad JSON (`400`) and unhandled exceptions (`500`), a corre
 
 ```
 src/SmartLedgerAI.Functions/   the Azure Function
-sql/                           anomaly view, both versions
+sql/                           anomaly view, both versions; audit queue; phase 0 snapshot query
+tools/SmartLedgerAI.SchemaDiff/ compares two schema snapshots (phase 0, see docs/phase-0-runbook.md)
 docs/                          screenshots from the demo
 ```
