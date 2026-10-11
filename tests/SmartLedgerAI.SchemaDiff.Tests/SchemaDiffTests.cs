@@ -47,6 +47,26 @@ public class SchemaDiffTests
     }
 
     [Fact]
+    public void Parse_ReadsHeaderlessTabSeparatedCopyFromSsms()
+    {
+        var tsv = "dbo\tExpenses\tUSER_TABLE\t1\tAmount\tdecimal\t9\t12\t2\t0\tNULL\n" +
+                  "dbo\ttrg_X\tSQL_TRIGGER\tNULL\tNULL\tNULL\tNULL\tNULL\tNULL\tNULL\tAB\n";
+
+        var objects = SchemaSnapshot.Parse(tsv);
+
+        Assert.Equal("decimal(12,2) NOT NULL", objects["dbo.Expenses"].Columns["Amount"].Describe());
+        Assert.Equal("AB", objects["dbo.trg_X"].DefinitionHash);
+    }
+
+    [Fact]
+    public void Parse_HeaderlessErrors_UseTheUsersLineNumbers()
+    {
+        var ex = Assert.Throws<FormatException>(() => SchemaSnapshot.Parse("dbo\tT\tUSER_TABLE\tx\tId\tint\t4\t10\t0\t0\tNULL\n"));
+
+        Assert.Contains("line 1", ex.Message);
+    }
+
+    [Fact]
     public void Parse_RejectsSnapshotWithoutRequiredColumns()
     {
         Assert.Throws<FormatException>(() => SchemaSnapshot.Parse("SchemaName,ObjectName\ndbo,X\n"));

@@ -16,7 +16,7 @@
 
 1. در SSMS به دیتابیس محلی وصل شوید و همان کوئری را اجرا کنید.
 2. روی نتیجه راست‌کلیک ← **Save Results As…** ← CSV، با نام `local.csv`.
-   در SSMS گزینهٔ *Tools ← Options ← Query Results ← SQL Server ← Results to Grid ← Include column headers when copying or saving the results* باید روشن باشد.
+   یا ساده‌تر: همهٔ جدول نتیجه را انتخاب و Copy کنید و در یک فایل `local.tsv` paste کنید — ابزار خروجی بدون سرستون و جداشده با Tab را هم می‌خواند.
 
 ## قدم ۳ — مقایسه
 

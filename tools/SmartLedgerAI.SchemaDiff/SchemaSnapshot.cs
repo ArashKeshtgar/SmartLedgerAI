@@ -26,15 +26,27 @@ public sealed class DbObject(string schema, string name, string type)
     public string FullName => $"{Schema}.{Name}";
 }
 
-// Reads the CSV that sql/phase0/schema_snapshot.sql produces (Azure Portal
-// query editor or SSMS export). Column order does not matter; headers do.
+// Reads what sql/phase0/schema_snapshot.sql produces: a CSV export with headers
+// (Azure Portal query editor, SSMS "Save Results As"), in any column order, or
+// a tab-separated grid copied from SSMS without headers, in the query's order.
 public static class SchemaSnapshot
 {
-    public static Dictionary<string, DbObject> Parse(string csv)
+    private static readonly string[] QueryColumns =
+    [
+        "SchemaName", "ObjectName", "ObjectType", "ColumnId", "ColumnName", "DataType",
+        "MaxLength", "Precision", "Scale", "IsNullable", "DefinitionHash",
+    ];
+
+    public static Dictionary<string, DbObject> Parse(string text)
     {
-        var rows = Csv.Parse(csv);
+        var firstLine = text.Split('\n', 2)[0];
+        var rows = Csv.Parse(text, firstLine.Contains('\t') ? '\t' : ',');
         if (rows.Count == 0)
             throw new FormatException("Snapshot is empty.");
+
+        var hasHeader = rows[0].Any(h => h.Trim().Equals("SchemaName", StringComparison.OrdinalIgnoreCase));
+        if (!hasHeader)
+            rows.Insert(0, [.. QueryColumns]);
 
         var header = rows[0].Select(h => h.Trim()).ToList();
         int Col(string name)
@@ -55,11 +67,12 @@ public static class SchemaSnapshot
             var row = rows[line - 1];
             if (row.All(v => v.Trim().Length == 0))
                 continue;
+            var userLine = hasHeader ? line : line - 1; // the header we inserted is not in their file
 
             string Get(int i) => i < row.Count ? Value(row[i]) : "";
             int Int(int i) => Get(i) is var v && v.Length == 0 ? 0
                 : int.TryParse(v, out var n) ? n
-                : throw new FormatException($"Snapshot line {line}: '{v}' is not a number. Was the CSV exported with the query's columns?");
+                : throw new FormatException($"Snapshot line {userLine}: '{v}' is not a number. Was the CSV exported with the query's columns?");
 
             var o = new DbObject(Get(schema), Get(obj), Get(type));
             if (!objects.TryGetValue(o.FullName, out var existing))
@@ -91,7 +104,7 @@ public static class SchemaSnapshot
 internal static class Csv
 {
     // RFC 4180: quoted fields, doubled quotes, commas and newlines inside quotes.
-    public static List<List<string>> Parse(string text)
+    public static List<List<string>> Parse(string text, char delimiter)
     {
         var rows = new List<List<string>>();
         var row = new List<string>();
@@ -112,7 +125,7 @@ internal static class Csv
             switch (ch)
             {
                 case '"': quoted = true; break;
-                case ',': row.Add(field.ToString()); field.Clear(); break;
+                case var d when d == delimiter: row.Add(field.ToString()); field.Clear(); break;
                 case '\r': break;
                 case '\n': row.Add(field.ToString()); field.Clear(); rows.Add(row); row = []; break;
                 case '﻿' when i == 0: break;
