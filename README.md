@@ -41,6 +41,21 @@ The statistics live in the database, not in the API. The function takes an expen
 ![Anomaly view](docs/anomaly-view.png)
 ![Live test](docs/live-test.png)
 
+## Control rules
+
+`src/SmartLedgerAI.Functions/Controls/` holds the deterministic exception rules from the finance plan. They are pure functions over loaded ledger data, so each is unit-tested without a database:
+
+| Rule | Flags | Severity |
+|---|---|---|
+| `DUPLICATE_PAYMENT` | same vendor, amount and invoice number within 90 days | High |
+| `NEW_VENDOR_LARGE_PAYMENT` | a vendor's first payment at or above the limit | Medium |
+| `MANUAL_ENTRY_TIMING` | manual entry outside business hours, at a weekend, or on the last day of the month | Low |
+| `MANUAL_CASH_CONTROL_ACCOUNT` | manual entry posting straight to cash (1000) or control accounts (1100, 1140, 1200) | Medium |
+| `THRESHOLD_PROXIMITY` | amount just at or below an approval limit (Medium), or a large round amount (Low) | Medium / Low |
+| `BENFORD_FIRST_DIGIT` | a unit-month of payments whose first digits fail Benford (MAD > 0.015, n ≥ 300) | Medium |
+
+Each finding becomes one row in `audit.Exception` ([`sql/audit/`](sql/audit/)), keyed by a fingerprint so a re-scan never duplicates it. Closing requires a resolution, and nobody can close an exception raised on their own work. The language model only explains an exception; it never decides one.
+
 ## Database
 
 - **Tables:** `Expenses`, `AccountingPeriods`, `ExpenseCategories` (foreign-key constrained)
