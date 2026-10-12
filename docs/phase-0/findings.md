@@ -49,3 +49,40 @@
 **ب:** تریگر حذف و به‌جایش یک CHECK constraint با تابع «ماه باز است» گذاشته شود. فرمول‌های اپ دست نمی‌خورد، ولی فقط مقدار جدید را چک می‌کند؛ دو حفرهٔ بالا (جابه‌جایی از ماه بسته و حذف) باز می‌ماند.
 
 هر کدام اول روی staging آزموده می‌شود.
+
+## راه‌حل الف آماده است (۱۲ اکتبر) — فقط برای staging
+
+| فایل | کار |
+|---|---|
+| [`sql/phase0/002_expense_writes_via_procedures.sql`](../../sql/phase0/002_expense_writes_via_procedures.sql) | چهار پروسیجر ثبت، ویرایش، تأیید و حذف، به‌علاوهٔ تریگر تازه |
+| [`…rollback.sql`](../../sql/phase0/002_expense_writes_via_procedures.rollback.sql) | تریگر و `sp_InsertExpense` اصلی را عیناً برمی‌گرداند |
+| [`…test.sql`](../../sql/phase0/002_expense_writes_via_procedures.test.sql) | ۱۷ حالت. **فقط روی دیتابیس دورریختنی**، نه staging |
+
+- **پروسیجرها:** `sp_InsertExpense` همان پنج پارامتر قبلی را دارد، به‌علاوهٔ پارامترهای اختیاری `PeriodId`، `CategoryId` و `TaxAmount`، و شناسهٔ هزینهٔ تازه را برمی‌گرداند. پروسیجرهای `sp_UpdateExpense`، `sp_ApproveExpense` و `sp_DeleteExpense` هم ماهِ فعلی هزینه را چک می‌کنند و هم ماهی را که هزینه به آن منتقل می‌شود.
+- **تریگر:** حالا `AFTER INSERT, UPDATE, DELETE` است. هم مقدار قدیم و هم مقدار جدید را چک می‌کند و فهرست ستون ثابت ندارد. هر سه حفره بسته می‌شود.
+- **آزمون محلی:** روی SQL Server 2022 با اسکیمای `005_powerapp_baseline.sql` تست شد:
+  - خطای Power App با تریگر فعلی بازتولید شد (Msg 334).
+  - بعد از اسکریپت، هر ۱۷ حالت تست درست بود.
+  - اسکریپت‌های ERP (از `010` تا `040`) روی آن بی‌خطا اجرا شدند.
+  - rollback متن هر دو شیء را عیناً به نسخهٔ اصلی برگرداند.
+
+### قدم‌های staging
+
+1. در Query editor دیتابیس **`FinancePowerApp-staging`**، اسکریپت `002_expense_writes_via_procedures.sql` را اجرا کنید.
+2. در **کپی** Power App: Data ← Add data ← SQL Server ← همان connection staging ← زبانهٔ **Stored procedures** ← هر چهار پروسیجر را اضافه کنید.
+3. هر `Patch` یا `Remove` روی `Expenses` را با فراخوانی پروسیجر عوض کنید و بعدش `Refresh(Expenses)` بگذارید. نمونه (اسم connection و کنترل‌ها مال اپ شماست):
+
+   ```
+   FinanceStaging.dbosp_InsertExpense({Amount: Value(txtAmount.Text), Category: ddCategory.Selected.Value,
+       ExpenseDate: dpDate.SelectedDate, Vendor: txtVendor.Text, Description: txtDesc.Text,
+       PeriodId: ddPeriod.Selected.PeriodId});
+   Refresh(Expenses)
+
+   FinanceStaging.dbosp_ApproveExpense({ExpenseId: gal.Selected.ExpenseId, ApprovedBy: User().Email})
+   FinanceStaging.dbosp_DeleteExpense({ExpenseId: gal.Selected.ExpenseId})
+   ```
+
+4. آزمون: هزینه را ثبت، ویرایش، تأیید و حذف کنید. بعد در ماه بسته همین چهار کار را امتحان کنید؛ هر چهار باید با پیام «Accounting period is closed» رد شوند.
+5. اگر نشد: `…rollback.sql` را روی staging اجرا کنید.
+
+**یک نکته:** اگر اپ وضعیت دیگری غیر از Pending و Approved دارد، مثلاً Rejected، بگویید تا پروسیجرش را اضافه کنم.
