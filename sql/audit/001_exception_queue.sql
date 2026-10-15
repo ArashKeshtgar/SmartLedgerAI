@@ -39,10 +39,10 @@ BEGIN
         PERIOD FOR SYSTEM_TIME (ValidFrom, ValidTo),
 
         CONSTRAINT UQ_audit_Exception_Fingerprint UNIQUE (Fingerprint),
-        -- A closed exception always says who closed it, when, and why.
+        -- A closed exception always says who closed it, when, and why. (IS NOT NULL: a CHECK lets UNKNOWN through.)
         CONSTRAINT CK_audit_Exception_Closure CHECK (
             (Status = 'Open'   AND ClosedBy IS NULL     AND ClosedAt IS NULL     AND Resolution IS NULL) OR
-            (Status = 'Closed' AND ClosedBy IS NOT NULL AND ClosedAt IS NOT NULL AND LEN(LTRIM(RTRIM(Resolution))) > 0)
+            (Status = 'Closed' AND ClosedBy IS NOT NULL AND ClosedAt IS NOT NULL AND Resolution IS NOT NULL AND LEN(LTRIM(RTRIM(Resolution))) > 0)
         ),
         -- Nobody closes an exception raised on their own work.
         CONSTRAINT CK_audit_Exception_NotSelfClosed CHECK (ClosedBy IS NULL OR SubjectUser IS NULL OR ClosedBy <> SubjectUser)

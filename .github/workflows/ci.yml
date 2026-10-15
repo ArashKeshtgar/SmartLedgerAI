@@ -32,6 +32,23 @@ jobs:
           dotnet test tests/SmartLedgerAI.Functions.Tests/SmartLedgerAI.Functions.Tests.csproj -c Release
           dotnet test tests/SmartLedgerAI.SchemaDiff.Tests/SmartLedgerAI.SchemaDiff.Tests.csproj -c Release
 
+  sql-tests:
+    runs-on: ubuntu-latest
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Ci-Only!Passw0rd"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run SQL scripts and their tests
+        env:
+          MSSQL_CONTAINER: ${{ job.services.mssql.id }}
+          MSSQL_SA_PASSWORD: "Ci-Only!Passw0rd"
+        run: tests/sql/run.sh
+
   docker-build:
     runs-on: ubuntu-latest
     needs: build-and-test
