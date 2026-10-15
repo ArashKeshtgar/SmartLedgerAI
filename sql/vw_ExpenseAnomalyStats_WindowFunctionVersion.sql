@@ -12,7 +12,7 @@ SELECT
     SampleSize,
     ZScore,
     CASE
-        WHEN ABS(ZScore) < 2 THEN 'Normal'
+        WHEN ABS(ZScore) < 2 THEN 'Low'
         WHEN ABS(ZScore) < 3 THEN 'Medium'
         ELSE 'High'
     END AS RiskLevel
