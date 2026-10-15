@@ -54,42 +54,29 @@
 
 | فایل | کار |
 |---|---|
-| [`sql/phase0/002_expense_writes_via_procedures.sql`](../../sql/phase0/002_expense_writes_via_procedures.sql) | پنج پروسیجر ثبت، ویرایش، تأیید، رد و حذف، به‌علاوهٔ تریگر تازه |
+| [`sql/phase0/002_expense_writes_via_procedures.sql`](../../sql/phase0/002_expense_writes_via_procedures.sql) | پروسیجرهای ثبت، تعیین ماه، تأیید، رد، ویرایش و حذف، به‌علاوهٔ تریگر تازه |
 | [`…rollback.sql`](../../sql/phase0/002_expense_writes_via_procedures.rollback.sql) | تریگر و `sp_InsertExpense` اصلی را عیناً برمی‌گرداند |
-| [`…test.sql`](../../sql/phase0/002_expense_writes_via_procedures.test.sql) | ۲۱ حالت. **فقط روی دیتابیس دورریختنی**، نه staging |
+| [`…test.sql`](../../sql/phase0/002_expense_writes_via_procedures.test.sql) | ۲۵ حالت. **فقط روی دیتابیس دورریختنی**، نه staging |
 
-- **پروسیجرها:** `sp_InsertExpense` همان پنج پارامتر قبلی را دارد، به‌علاوهٔ پارامترهای اختیاری `PeriodId`، `CategoryId` و `TaxAmount`، و شناسهٔ هزینهٔ تازه را برمی‌گرداند. پروسیجرهای `sp_UpdateExpense`، `sp_ApproveExpense`، `sp_RejectExpense` و `sp_DeleteExpense` هم ماهِ فعلی هزینه را چک می‌کنند و هم ماهی را که هزینه به آن منتقل می‌شود.
+- **پروسیجرها:** `sp_InsertExpense` همان پنج پارامتر قبلی را دارد، به‌علاوهٔ پارامترهای اختیاری `PeriodId`، `CategoryId` و `TaxAmount`، و شناسهٔ هزینهٔ تازه را برمی‌گرداند. پروسیجرهای `sp_AssignExpensePeriod`، `sp_UpdateExpense`، `sp_ApproveExpense`، `sp_RejectExpense` و `sp_DeleteExpense` هم ماهِ فعلی هزینه را چک می‌کنند و هم ماهی را که هزینه به آن منتقل می‌شود.
 - **تریگر:** حالا `AFTER INSERT, UPDATE, DELETE` است. هم مقدار قدیم و هم مقدار جدید را چک می‌کند و فهرست ستون ثابت ندارد. هر سه حفره بسته می‌شود.
 - **آزمون محلی:** روی SQL Server 2022 با اسکیمای `005_powerapp_baseline.sql` تست شد:
   - خطای Power App با تریگر فعلی بازتولید شد (Msg 334).
-  - بعد از اسکریپت، هر ۲۱ حالت تست درست بود.
+  - بعد از اسکریپت، هر ۲۵ حالت تست درست بود.
   - اسکریپت‌های ERP (از `010` تا `040`) روی آن بی‌خطا اجرا شدند.
   - rollback متن هر دو شیء را عیناً به نسخهٔ اصلی برگرداند.
 
 ### قدم‌های staging
 
 1. در Query editor دیتابیس **`FinancePowerApp-staging`**، اسکریپت `002_expense_writes_via_procedures.sql` را اجرا کنید.
-2. در **کپی** Power App: Data ← Add data ← SQL Server ← همان connection staging ← زبانهٔ **Stored procedures** ← هر پنج پروسیجر را اضافه کنید.
-3. هر `Patch` یا `Remove` روی `Expenses` را با فراخوانی پروسیجر عوض کنید و بعدش `Refresh(Expenses)` بگذارید. نمونه (اسم connection و کنترل‌ها مال اپ شماست):
-
-   ```
-   FinanceStaging.dbosp_InsertExpense({Amount: Value(txtAmount.Text), Category: ddCategory.Selected.Value,
-       ExpenseDate: dpDate.SelectedDate, Vendor: txtVendor.Text, Description: txtDesc.Text,
-       PeriodId: ddPeriod.Selected.PeriodId});
-   Refresh(Expenses)
-
-   FinanceStaging.dbosp_ApproveExpense({ExpenseId: gal.Selected.ExpenseId, ApprovedBy: User().Email})
-   FinanceStaging.dbosp_RejectExpense({ExpenseId: gal.Selected.ExpenseId})
-   FinanceStaging.dbosp_DeleteExpense({ExpenseId: gal.Selected.ExpenseId})
-   ```
-
-4. آزمون: هزینه را ثبت، ویرایش، تأیید، رد و حذف کنید. بعد در ماه بسته همین کارها را امتحان کنید؛ همه باید با پیام «Accounting period is closed» رد شوند.
-5. اگر نشد: `…rollback.sql` را روی staging اجرا کنید.
+2. فرمول چهار دکمهٔ کپی اپ را طبق [`powerapp-formulas.md`](powerapp-formulas.md) عوض کنید. فرمول‌ها از روی فرمول‌های
+   واقعی اپ نوشته شده‌اند و آمادهٔ کپی‌اند. جدول آزمون هم در همان فایل است.
+3. اگر نشد: `…rollback.sql` را روی staging اجرا کنید.
 
 ### تصمیم مالک (۱۵ اکتبر)
 
 - **راه‌حل الف تأیید شد** تا روی staging آزموده شود. روی production هنوز نه.
-- **وضعیت Rejected اضافه شد:** `sp_RejectExpense` فقط هزینه‌ای را رد می‌کند که هنوز تأیید یا رد نشده باشد. هزینهٔ تأییدشده را رد نمی‌کند، چون ERP هزینه‌های تأییدشده را به دفتر کل می‌برد. جدول ستونی برای «چه کسی رد کرد» ندارد؛ اگر لازم است، افزودنش تصمیم جداگانه است.
+- **وضعیت Rejected اضافه شد:** `sp_RejectExpense` فقط هزینه‌ای را رد می‌کند که هنوز تأیید یا رد نشده باشد. هزینهٔ تأییدشده را رد نمی‌کند، چون ERP هزینه‌های تأییدشده را به دفتر کل می‌برد. اسم ردکننده، مثل دکمهٔ Reject امروز، در `ApprovedBy` ذخیره می‌شود.
 - **اپ اصلی امروز ثبت می‌کند یا نه؟** هنوز معلوم نیست. کوئری فقط‌خواندنی [`sql/phase0/check_app_writes.sql`](../../sql/phase0/check_app_writes.sql) را روی production اجرا کنید. اگر `CreatedSinceTrigger` صفر است و اپ در این مدت استفاده شده، اپ اصلی هم ثبت نمی‌کند. همین کوئری نشان می‌دهد `Rejected` الان در داده‌ها هست یا نه، و با چه املایی.
 
 ## صف استثنا: اولین اجرا و یک باگ (۱۵ اکتبر)
@@ -99,3 +86,17 @@
 - **باگ پیدا شد:** با یک UPDATE مستقیم می‌شد «راه‌حل» یک استثنای بسته را `NULL` کرد. دلیلش این است که در CHECK، شرط `LEN(NULL) > 0` نه درست است نه غلط (UNKNOWN)، و SQL Server چنین مقداری را رد نمی‌کند. با افزودن `Resolution IS NOT NULL` درست شد. اسکریپت هنوز روی هیچ دیتابیس واقعی اجرا نشده، پس چیزی برای اصلاح در دیتابیس‌ها نیست.
 - **تست تازه:** `001_exception_queue.test.sql` ۱۶ حالت را چک می‌کند، از جمله دسترسی‌های نقش `smartledger_app`. هر ۱۶ حالت درست است.
 - **CI:** از این به بعد، کار `sql-tests` در CI هر دو اسکریپت (صف استثنا و راه‌حل الف) را با تست‌هایشان روی SQL Server اجرا می‌کند.
+
+## فرمول‌های اپ (۱۵ اکتبر)
+
+مالک فرمول دکمه‌ها را فرستاد. بر اساس آن‌ها:
+
+- **اپ ویرایش و حذف ندارد.** فقط ثبت، تعیین ماه، تأیید و رد دارد. حفرهٔ «حذف در ماه بسته» از راه اپ باز نبود، ولی از راه
+  دسترسی مستقیم به دیتابیس باز بود و تریگر تازه آن را می‌بندد.
+- **تعیین ماه** فقط `PeriodId` را عوض می‌کند، پس پروسیجر جدا گرفت: `sp_AssignExpensePeriod`.
+- **حفرهٔ چهارم:** دکمهٔ Submit وضعیت را از لیست کشویی می‌گرفت، پس می‌شد هزینه را از همان اول «Approved» ثبت کرد،
+  بدون تأیید و بدون اسم تأییدکننده. `sp_InsertExpense` همیشه Pending ثبت می‌کند.
+- **Close Month** روی `AccountingPeriods` است که تریگر ندارد؛ دست نمی‌خورد.
+- **سؤال برای ERP:** دکمهٔ Submit ستون `TaxAmount` را ۱۳٪ مبلغ حساب می‌کند، یعنی HST. ولی README مخزن FinancePowerApp
+  می‌گوید این ستون «بخش قابل کسر مالیات بر درآمد است، نه HST» و برای همین ERP اعتبار مالیاتی (ITC) نمی‌گیرد. یکی از این
+  دو اشتباه است، و باید پیش از نصب ERP روی staging روشن شود.

@@ -1,6 +1,6 @@
 /*
     Tests for 002_expense_writes_via_procedures.sql. THROWAWAY DATABASE ONLY: it adds two periods
-    (9999-01 closed, 9999-02 open) and expenses in them, and removes what it can at the end.
+    (9999-01 closed, 9999-02 and 9999-03 open) and expenses in them, and removes what it can at the end.
     Prints PASS/FAIL per case and raises an error if any case failed.
 */
 SET NOCOUNT ON;
@@ -79,31 +79,50 @@ BEGIN CATCH PRINT 'PASS 10b unknown expense: ' + ERROR_MESSAGE(); END CATCH;
 DECLARE @Rej INT;
 INSERT @New EXEC dbo.sp_InsertExpense 30, 'Meals', '9999-02-05', 'Cafe', 'Lunch', @Open;
 SELECT @Rej = ExpenseId FROM @New WHERE ExpenseId <> @Id; DELETE @New;
-EXEC dbo.sp_RejectExpense @Rej;
-IF EXISTS (SELECT 1 FROM dbo.Expenses WHERE ExpenseId = @Rej AND Status = 'Rejected' AND ApprovedBy IS NULL)
+EXEC dbo.sp_RejectExpense @Rej, N'reviewer@example.com';
+IF EXISTS (SELECT 1 FROM dbo.Expenses WHERE ExpenseId = @Rej AND Status = 'Rejected' AND ApprovedBy = N'reviewer@example.com' AND ApprovedDate IS NOT NULL)
     PRINT 'PASS 11a reject pending';
 ELSE BEGIN PRINT 'FAIL 11a reject pending'; SET @Fail += 1; END;
-BEGIN TRY EXEC dbo.sp_RejectExpense @Rej; PRINT 'FAIL 11b reject twice'; SET @Fail += 1; END TRY
+BEGIN TRY EXEC dbo.sp_RejectExpense @Rej, N'reviewer@example.com'; PRINT 'FAIL 11b reject twice'; SET @Fail += 1; END TRY
 BEGIN CATCH PRINT 'PASS 11b reject twice: ' + ERROR_MESSAGE(); END CATCH;
-BEGIN TRY EXEC dbo.sp_RejectExpense @Id; PRINT 'FAIL 11c reject approved'; SET @Fail += 1; END TRY
+BEGIN TRY EXEC dbo.sp_RejectExpense @Id, N'reviewer@example.com'; PRINT 'FAIL 11c reject approved'; SET @Fail += 1; END TRY
 BEGIN CATCH PRINT 'PASS 11c reject approved: ' + ERROR_MESSAGE(); END CATCH;
-BEGIN TRY EXEC dbo.sp_RejectExpense @InClosed; PRINT 'FAIL 11d reject in closed month'; SET @Fail += 1; END TRY
+BEGIN TRY EXEC dbo.sp_RejectExpense @InClosed, N'reviewer@example.com'; PRINT 'FAIL 11d reject in closed month'; SET @Fail += 1; END TRY
 BEGIN CATCH PRINT 'PASS 11d reject in closed month: ' + ERROR_MESSAGE(); END CATCH;
 
--- 12. Delete in an open month works.
+-- 12. Assign period, as the app does: a new expense has none; it can be given an open month and moved
+--     between open months, never into or out of a closed one.
+DECLARE @Asg INT, @Open2 INT;
+INSERT dbo.AccountingPeriods ([Year], [Month], IsClosed) VALUES (9999, 3, 0);
+SET @Open2 = SCOPE_IDENTITY();
+INSERT @New EXEC dbo.sp_InsertExpense 40, 'Fuel', '9999-02-06', 'Station', 'Fill-up';
+SELECT @Asg = ExpenseId FROM @New; DELETE @New;
+EXEC dbo.sp_AssignExpensePeriod @Asg, @Open;
+EXEC dbo.sp_AssignExpensePeriod @Asg, @Open2;
+IF EXISTS (SELECT 1 FROM dbo.Expenses WHERE ExpenseId = @Asg AND PeriodId = @Open2 AND Amount = 40 AND Status = 'Pending')
+    PRINT 'PASS 12a assign and move between open months';
+ELSE BEGIN PRINT 'FAIL 12a assign and move between open months'; SET @Fail += 1; END;
+BEGIN TRY EXEC dbo.sp_AssignExpensePeriod @Asg, @Closed; PRINT 'FAIL 12b assign into closed month'; SET @Fail += 1; END TRY
+BEGIN CATCH PRINT 'PASS 12b assign into closed month: ' + ERROR_MESSAGE(); END CATCH;
+BEGIN TRY EXEC dbo.sp_AssignExpensePeriod @InClosed, @Open; PRINT 'FAIL 12c assign out of closed month'; SET @Fail += 1; END TRY
+BEGIN CATCH PRINT 'PASS 12c assign out of closed month: ' + ERROR_MESSAGE(); END CATCH;
+BEGIN TRY EXEC dbo.sp_AssignExpensePeriod @Asg, -1; PRINT 'FAIL 12d unknown period'; SET @Fail += 1; END TRY
+BEGIN CATCH PRINT 'PASS 12d unknown period: ' + ERROR_MESSAGE(); END CATCH;
+
+-- 13. Delete in an open month works.
 EXEC dbo.sp_DeleteExpense @Id;
 IF NOT EXISTS (SELECT 1 FROM dbo.Expenses WHERE ExpenseId = @Id)
-    PRINT 'PASS 12 delete in open month';
-ELSE BEGIN PRINT 'FAIL 12 delete in open month'; SET @Fail += 1; END;
+    PRINT 'PASS 13 delete in open month';
+ELSE BEGIN PRINT 'FAIL 13 delete in open month'; SET @Fail += 1; END;
 
--- 13. No transaction left open by any failure above.
-IF @@TRANCOUNT = 0 PRINT 'PASS 13 no open transaction';
-ELSE BEGIN PRINT 'FAIL 13 open transaction'; SET @Fail += 1; ROLLBACK; END;
+-- 14. No transaction left open by any failure above.
+IF @@TRANCOUNT = 0 PRINT 'PASS 14 no open transaction';
+ELSE BEGIN PRINT 'FAIL 14 open transaction'; SET @Fail += 1; ROLLBACK; END;
 
 -- Clean up: reopen the month so its expense can go, then remove the test periods.
 UPDATE dbo.AccountingPeriods SET IsClosed = 0 WHERE PeriodId = @Closed;
-DELETE dbo.Expenses WHERE PeriodId IN (@Closed, @Open);
-DELETE dbo.AccountingPeriods WHERE PeriodId IN (@Closed, @Open);
+DELETE dbo.Expenses WHERE PeriodId IN (@Closed, @Open, @Open2) OR ExpenseId = @Asg;
+DELETE dbo.AccountingPeriods WHERE PeriodId IN (@Closed, @Open, @Open2);
 
 IF @Fail > 0
 BEGIN

@@ -14,7 +14,8 @@
       1. Procedures for every write the app makes; each checks the period the expense is in now
          AND the period it is moved to:
            sp_InsertExpense  (same five parameters as before; new optional ones at the end)
-           sp_UpdateExpense, sp_ApproveExpense, sp_RejectExpense, sp_DeleteExpense
+           sp_AssignExpensePeriod, sp_ApproveExpense, sp_RejectExpense  (what the app's buttons do)
+           sp_UpdateExpense, sp_DeleteExpense                         (the app has no edit or delete today)
       2. Replaces the INSTEAD OF trigger with an AFTER INSERT, UPDATE, DELETE trigger: the second
          line of defence for anything that still writes to the table directly. No column list.
       3. (Commented out) takes direct write rights on dbo.Expenses away from the app's database user.
@@ -96,6 +97,38 @@ BEGIN
 END;
 GO
 
+-- The app's "Assign period" button: only PeriodId changes. Both the month it leaves and the one it
+-- goes to must be open.
+CREATE OR ALTER PROCEDURE dbo.sp_AssignExpensePeriod
+    @ExpenseId INT,
+    @PeriodId  INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.AccountingPeriods WHERE PeriodId = @PeriodId)
+        THROW 50008, 'Accounting period not found.', 1;
+
+    BEGIN TRY
+        BEGIN TRAN;
+        DECLARE @OldPeriodId INT;
+        SELECT @OldPeriodId = PeriodId FROM dbo.Expenses WITH (UPDLOCK, HOLDLOCK) WHERE ExpenseId = @ExpenseId;
+        IF @@ROWCOUNT = 0
+            THROW 50003, 'Expense not found.', 1;
+        IF dbo.fn_IsPeriodClosed(@OldPeriodId) = 1 OR dbo.fn_IsPeriodClosed(@PeriodId) = 1
+            THROW 50002, 'Accounting period is closed. No changes allowed.', 1;
+
+        UPDATE dbo.Expenses SET PeriodId = @PeriodId WHERE ExpenseId = @ExpenseId;
+        COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_ApproveExpense
     @ExpenseId  INT,
     @ApprovedBy NVARCHAR(100)
@@ -131,13 +164,17 @@ END;
 GO
 
 -- An approved expense is not rejected: it may already be in the ledger (the ERP posts approved ones).
--- dbo.Expenses has no column for who rejected; adding one is left to the owner.
+-- Who rejected goes in ApprovedBy/ApprovedDate, as the app's Reject button does today.
 CREATE OR ALTER PROCEDURE dbo.sp_RejectExpense
-    @ExpenseId INT
+    @ExpenseId  INT,
+    @RejectedBy NVARCHAR(100)
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+
+    IF NULLIF(LTRIM(@RejectedBy), N'') IS NULL
+        THROW 50004, 'RejectedBy is required.', 1;
 
     BEGIN TRY
         BEGIN TRAN;
@@ -152,7 +189,9 @@ BEGIN
         IF @Status = 'Rejected'
             THROW 50007, 'Expense is already rejected.', 1;
 
-        UPDATE dbo.Expenses SET Status = 'Rejected' WHERE ExpenseId = @ExpenseId;
+        UPDATE dbo.Expenses
+           SET Status = 'Rejected', ApprovedBy = @RejectedBy, ApprovedDate = GETDATE()
+         WHERE ExpenseId = @ExpenseId;
         COMMIT;
     END TRY
     BEGIN CATCH
@@ -208,6 +247,7 @@ GO
        Has no effect if that user is db_owner or the server admin: it then needs its own user.
 
     GRANT EXECUTE ON dbo.sp_InsertExpense  TO [powerapp_user];
+    GRANT EXECUTE ON dbo.sp_AssignExpensePeriod TO [powerapp_user];
     GRANT EXECUTE ON dbo.sp_UpdateExpense  TO [powerapp_user];
     GRANT EXECUTE ON dbo.sp_ApproveExpense TO [powerapp_user];
     GRANT EXECUTE ON dbo.sp_RejectExpense  TO [powerapp_user];

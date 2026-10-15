@@ -6,7 +6,7 @@
     on it afterwards if a user had it.
 */
 
-DROP PROCEDURE IF EXISTS dbo.sp_UpdateExpense, dbo.sp_ApproveExpense, dbo.sp_RejectExpense, dbo.sp_DeleteExpense;
+DROP PROCEDURE IF EXISTS dbo.sp_AssignExpensePeriod, dbo.sp_UpdateExpense, dbo.sp_ApproveExpense, dbo.sp_RejectExpense, dbo.sp_DeleteExpense;
 GO
 
 DROP PROCEDURE IF EXISTS dbo.sp_InsertExpense;

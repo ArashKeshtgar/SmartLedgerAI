@@ -26,7 +26,7 @@ changed=$(sql -h -1 -W -Q "SET NOCOUNT ON;
 SELECT o.name FROM Fixture.sys.sql_modules m JOIN Fixture.sys.objects o ON o.object_id = m.object_id
 LEFT JOIN OptionA.sys.objects o2 ON o2.name = o.name LEFT JOIN OptionA.sys.sql_modules m2 ON m2.object_id = o2.object_id
 WHERE m2.definition IS NULL OR m2.definition <> m.definition
-UNION ALL SELECT name FROM OptionA.sys.objects WHERE name IN (N'fn_IsPeriodClosed', N'sp_UpdateExpense', N'sp_ApproveExpense', N'sp_RejectExpense', N'sp_DeleteExpense');")
+UNION ALL SELECT name FROM OptionA.sys.objects WHERE name IN (N'fn_IsPeriodClosed', N'sp_AssignExpensePeriod', N'sp_UpdateExpense', N'sp_ApproveExpense', N'sp_RejectExpense', N'sp_DeleteExpense');")
 if [ -n "$changed" ]; then echo "FAIL rollback left these different from the original: $changed"; exit 1; fi
 echo "PASS rollback restores the original objects"
 
