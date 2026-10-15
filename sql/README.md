@@ -8,7 +8,8 @@ The database schema for both projects. Scripts are written to run against Azure 
 |---|---|---|
 | `vw_ExpenseAnomalyStats_WindowFunctionVersion.sql` | `vw_ExpenseAnomalyStats_v2` | ✅ committed |
 | `audit/001_exception_queue.sql` | schema `audit`: `audit.Exception` review queue, `sp_RaiseException`, `sp_CloseException`, `vw_OpenExceptionSummary`, role `smartledger_app` | ✅ committed — staging only until signed off; tested by `audit/001_exception_queue.test.sql` |
-| `phase0/002_expense_writes_via_procedures.sql` | Option A for the closed-period guard: `sp_InsertExpense` (extended), `sp_UpdateExpense`, `sp_ApproveExpense`, `sp_DeleteExpense`, `AFTER` trigger; `.rollback.sql` undoes it | ✅ committed — staging only, owner's choice pending; tested by `.test.sql` |
+| `phase0/check_app_writes.sql` | read only: has anything been created or approved since the trigger was put in place; `Status` values in use | ✅ safe on production |
+| `phase0/002_expense_writes_via_procedures.sql` | Option A for the closed-period guard: `sp_InsertExpense` (extended), `sp_UpdateExpense`, `sp_ApproveExpense`, `sp_RejectExpense`, `sp_DeleteExpense`, `AFTER` trigger; `.rollback.sql` undoes it | ✅ committed — approved for staging (not production); tested by `.test.sql` |
 | _(to add)_ | `vw_ExpenseAnomalyStats` — the CTE + self-join version the function reads | ⏳ |
 | _(to add)_ | `sp_InsertExpense` — validation, `TRY/CATCH`, transaction | ⏳ |
 | _(to add)_ | table definitions: `Expenses`, `AccountingPeriods`, `ExpenseCategories` | ⏳ |

@@ -14,7 +14,7 @@
       1. Procedures for every write the app makes; each checks the period the expense is in now
          AND the period it is moved to:
            sp_InsertExpense  (same five parameters as before; new optional ones at the end)
-           sp_UpdateExpense, sp_ApproveExpense, sp_DeleteExpense
+           sp_UpdateExpense, sp_ApproveExpense, sp_RejectExpense, sp_DeleteExpense
       2. Replaces the INSTEAD OF trigger with an AFTER INSERT, UPDATE, DELETE trigger: the second
          line of defence for anything that still writes to the table directly. No column list.
       3. (Commented out) takes direct write rights on dbo.Expenses away from the app's database user.
@@ -130,6 +130,38 @@ BEGIN
 END;
 GO
 
+-- An approved expense is not rejected: it may already be in the ledger (the ERP posts approved ones).
+-- dbo.Expenses has no column for who rejected; adding one is left to the owner.
+CREATE OR ALTER PROCEDURE dbo.sp_RejectExpense
+    @ExpenseId INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        BEGIN TRAN;
+        DECLARE @PeriodId INT, @Status VARCHAR(20);
+        SELECT @PeriodId = PeriodId, @Status = Status FROM dbo.Expenses WITH (UPDLOCK, HOLDLOCK) WHERE ExpenseId = @ExpenseId;
+        IF @@ROWCOUNT = 0
+            THROW 50003, 'Expense not found.', 1;
+        IF dbo.fn_IsPeriodClosed(@PeriodId) = 1
+            THROW 50002, 'Accounting period is closed. No changes allowed.', 1;
+        IF @Status = 'Approved'
+            THROW 50006, 'An approved expense cannot be rejected.', 1;
+        IF @Status = 'Rejected'
+            THROW 50007, 'Expense is already rejected.', 1;
+
+        UPDATE dbo.Expenses SET Status = 'Rejected' WHERE ExpenseId = @ExpenseId;
+        COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_DeleteExpense
     @ExpenseId INT
 AS
@@ -178,6 +210,7 @@ GO
     GRANT EXECUTE ON dbo.sp_InsertExpense  TO [powerapp_user];
     GRANT EXECUTE ON dbo.sp_UpdateExpense  TO [powerapp_user];
     GRANT EXECUTE ON dbo.sp_ApproveExpense TO [powerapp_user];
+    GRANT EXECUTE ON dbo.sp_RejectExpense  TO [powerapp_user];
     GRANT EXECUTE ON dbo.sp_DeleteExpense  TO [powerapp_user];
     DENY INSERT, UPDATE, DELETE ON dbo.Expenses TO [powerapp_user];
 */
