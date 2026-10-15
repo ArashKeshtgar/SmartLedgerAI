@@ -30,6 +30,20 @@ UNION ALL SELECT name FROM OptionA.sys.objects WHERE name IN (N'fn_IsPeriodClose
 if [ -n "$changed" ]; then echo "FAIL rollback left these different from the original: $changed"; exit 1; fi
 echo "PASS rollback restores the original objects"
 
+echo "== Option B+: closed-period constraints"
+fresh OptionB
+run OptionB sql/phase0/003_closed_period_constraints.sql
+run OptionB sql/phase0/003_closed_period_constraints.sql
+run OptionB sql/phase0/003_closed_period_constraints.test.sql
+run OptionB sql/phase0/003_closed_period_constraints.rollback.sql
+changed=$(sql -h -1 -W -Q "SET NOCOUNT ON;
+SELECT o.name FROM Fixture.sys.sql_modules m JOIN Fixture.sys.objects o ON o.object_id = m.object_id
+LEFT JOIN OptionB.sys.objects o2 ON o2.name = o.name LEFT JOIN OptionB.sys.sql_modules m2 ON m2.object_id = o2.object_id
+WHERE m2.definition IS NULL OR m2.definition <> m.definition
+UNION ALL SELECT name FROM OptionB.sys.objects WHERE name IN (N'fn_IsPeriodClosed', N'fn_ExpenseRowWritable', N'CK_Expenses_PeriodOpen', N'CK_Expenses_DecisionHasApprover');")
+if [ -n "$changed" ]; then echo "FAIL rollback left these different from the original: $changed"; exit 1; fi
+echo "PASS rollback restores the original objects"
+
 echo "== Audit exception queue"
 fresh Audit
 run Audit sql/audit/001_exception_queue.sql
